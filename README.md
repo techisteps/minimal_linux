@@ -11,9 +11,16 @@
 Open new powershell terminal and run below command.
 ```bash
 # Make sure you have Docker installed on your system
-docker run --privileged -it ubuntu
+docker run --privileged -itd --name minilinux -v .:/mnt/hostfs ubuntu
 
 # I tested with Ubuntu image version 35a88802559dd2077e584394471ddaa1a2c5bfd16893b829ea57619301eb3908
+
+# If container is not running than run below command first
+docker start minilinux
+
+docker attach minilinux
+
+
 ```
 
 After previous command execution you'll land into docker instance. Run below commands with in instance.
@@ -26,7 +33,9 @@ After previous command execution you'll land into docker instance. Run below com
 apt update
 
 # Install required packages (Few more we'll install later)
-apt get install bzip2 git vim make gcc libncurses-dev flex bison bc cpio libelf-dev libssl-dev syslinux dosfstools
+apt install bzip2 git vim make gcc libncurses-dev flex bison bc cpio libelf-dev libssl-dev syslinux dosfstools
+
+mkdir /boot-files
 ```
 
 ### Build Linux Kernel
@@ -47,9 +56,15 @@ git clone --depth 1 https://github.com/torvalds/linux.git
 # Run menuconfig to generate config files (keep default)
 cd linux
 make menuconfig
+```
+>> ![Qemu driver!](/assets/images/linux_driver_qemu.png "Qemu driver") 
+
+```bash
 
 # Make kernel
-make -j 6
+make -j16
+
+cp arch/x86/boot/bzImage /boot-files/
 ```
 
 ### Build Busybox
@@ -70,22 +85,25 @@ git clone --depth 1 https://git.busybox.net/busybox/
 # Run menuconfig to generate config files (keep default)
 cd busybox
 make menuconfig
+```
 
+> **Resolution for busybox install error:**  
+>> Run menuconfig for busybox again and deselect tc component from networing utilities option.  
+>> [Got Idea from this post](https://www.reddit.com/r/linuxquestions/comments/1cizfpo/id_like_some_help_with_this_youtube_guide/)  
+>> ![Networking Utilities!](/assets/images/busybox_networking.png "Networking Utilities")  
+>> ![tc Component!](/assets/images/busybox_networking_tc.png "tc Component")  
+>> ![Static Component!](/assets/images/busybox_static.png "Static Component")  
+>> once done build busybox again and install
+
+```bash
 # Make busybox
-make -j 6
+make -j16
 
 # Copy busybox files to initramfs folder (Refer below if you face errors related to CONFIG_TC)
 mkdir /boot-files/initramfs
 make CONFIG_PREFIX=/boot-files/initramfs install
 
 ```
-> **Resolution for busybox install error:**  
->> Run menuconfig for busybox again and deselect tc component from networing utilities option.  
->> [Got Idea from this post](https://www.reddit.com/r/linuxquestions/comments/1cizfpo/id_like_some_help_with_this_youtube_guide/)  
->> ![Networking Utilities!](/assets/images/busybox_networking.png "Networking Utilities")  
->> ![tc Component!](/assets/images/busybox_networking_tc.png "tc Component")  
->> once done build busybox again and install
-
 
 ### Create initramfs
 ![](https://placehold.co/600x10/8FBC8B/FFF?text=------------------------------------------------------------------)
@@ -113,6 +131,8 @@ cd /boot-files/initramfs
 find . | cpio -o -H newc > ../init.cpio
 
 
+
+cd /boot-files/
 #apt install syslinux
 #apt install dosfstools
 
@@ -135,6 +155,8 @@ umount tmpmount
 
 ```shell
 # Copy boot file from docker instance to local 
+cp boot /mnt/hostfs/
+# OR
 docker cp e6b3f77c4c00:/boot-files/boot .
 
 # Make sure you have Qemu installed on your system
